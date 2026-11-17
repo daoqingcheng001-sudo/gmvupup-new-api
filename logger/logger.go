@@ -100,13 +100,17 @@ func logHelper(ctx context.Context, level string, msg string) {
 	if id == nil {
 		id = "SYSTEM"
 	}
+	attemptID := ctx.Value(common.AttemptIdKey)
+	if attemptID == nil {
+		attemptID = "SYSTEM"
+	}
 	now := time.Now()
 	common.LogWriterMu.RLock()
 	writer := gin.DefaultErrorWriter
 	if level == loggerINFO {
 		writer = gin.DefaultWriter
 	}
-	_, _ = fmt.Fprintf(writer, "[%s] %v | %s | %s \n", level, now.Format("2006/01/02 - 15:04:05"), id, msg)
+	_, _ = fmt.Fprintf(writer, "[%s] %v | request=%s attempt=%s | %s \n", level, now.Format("2006/01/02 - 15:04:05"), id, attemptID, msg)
 	common.LogWriterMu.RUnlock()
 	if logCount.Add(1) > maxLogCount && setupLogWorking.CompareAndSwap(false, true) {
 		logCount.Store(0)

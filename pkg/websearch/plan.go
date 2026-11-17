@@ -163,7 +163,10 @@ func geminiSearchTool(t []byte) bool {
 }
 
 func (p *Plan) settings(t gjson.Result) error {
-	if v := t.Get("external_web_access"); v.Exists() && v.Type != gjson.Null && v.Raw != "true" {
+	// Responses preview tools always permit live access. Ignore this field
+	// only for that protocol/tool combination, preserving all other controls.
+	preview := p.Protocol == "responses" && strings.HasPrefix(t.Get("type").String(), "web_search_preview")
+	if v := t.Get("external_web_access"); !preview && v.Exists() && v.Type != gjson.Null && v.Raw != "true" {
 		return errors.New("DeepSeek web search requires live web access; cache-only search is unavailable")
 	}
 	if v := t.Get("user_location"); v.Exists() && v.Type != gjson.Null && v.Raw != "{}" {
@@ -470,8 +473,7 @@ func (p *Plan) Restore(ctx context.Context, store Store) error {
 		var input []json.RawMessage
 		for _, part := range Arr(p.Body["input"]) {
 			r := gjson.ParseBytes(part)
-			id := r.Get("id").String()
-			if strings.HasPrefix(id, "ws_na_") {
+			if id := managedHistoryReference(p.Protocol, r); id != "" {
 				record, err := store.Get(ctx, id)
 				if err != nil {
 					return err
@@ -486,6 +488,7 @@ func (p *Plan) Restore(ctx context.Context, store Store) error {
 		}
 	} else if p.Protocol == "claude" {
 		var messages []json.RawMessage
+		restored := map[string]bool{}
 		for _, m := range Arr(p.Body["messages"]) {
 			o, err := Obj(m)
 			if err != nil {
@@ -509,18 +512,22 @@ func (p *Plan) Restore(ctx context.Context, store Store) error {
 			}
 			for _, part := range Arr(o["content"]) {
 				r := gjson.ParseBytes(part)
-				id := r.Get("id").String()
-				if strings.HasPrefix(id, "ws_na_") {
+				id := managedHistoryReference(p.Protocol, r)
+				if id != "" && r.Get("type").String() == "server_tool_use" {
 					record, err := store.Get(ctx, id)
 					if err != nil {
 						return err
 					}
 					pending = append(pending, record.Call)
+					restored[id] = true
 					flush()
 					messages = append(messages, Raw(map[string]any{"role": "user", "content": []any{map[string]any{"type": "tool_result", "tool_use_id": gjson.GetBytes(record.Call, "id").String(), "content": string(record.Result)}}}))
 					continue
 				}
-				if strings.HasPrefix(r.Get("tool_use_id").String(), "ws_na_") {
+				if id != "" {
+					if !restored[id] {
+						return errors.New("managed web result is missing its original call")
+					}
 					continue
 				}
 				pending = append(pending, part)

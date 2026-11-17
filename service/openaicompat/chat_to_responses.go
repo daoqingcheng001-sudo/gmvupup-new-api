@@ -317,14 +317,6 @@ func ChatCompletionsRequestToResponsesRequest(req *dto.GeneralOpenAIRequest) (*d
 		parallelToolCallsRaw, _ = common.Marshal(*req.ParallelTooCalls)
 	}
 
-	var promptCacheKeyRaw json.RawMessage
-	if req.PromptCacheKey != "" {
-		promptCacheKeyRaw, err = common.Marshal(req.PromptCacheKey)
-		if err != nil {
-			return nil, fmt.Errorf("marshal prompt_cache_key: %w", err)
-		}
-	}
-
 	textRaw, formatErr := chatFormatToResponsesText(req.ResponseFormat, req.Verbosity)
 	if formatErr != nil {
 		return nil, formatErr
@@ -346,23 +338,24 @@ func ChatCompletionsRequestToResponsesRequest(req *dto.GeneralOpenAIRequest) (*d
 	}
 
 	out := &dto.OpenAIResponsesRequest{
-		Model:             req.Model,
-		Input:             inputRaw,
-		Instructions:      instructionsRaw,
-		Stream:            req.Stream,
-		Temperature:       req.Temperature,
-		Text:              textRaw,
-		ToolChoice:        toolChoiceRaw,
-		Tools:             toolsRaw,
-		TopP:              topP,
-		User:              req.User,
-		ParallelToolCalls: parallelToolCallsRaw,
-		Store:             req.Store,
-		Metadata:          req.Metadata,
-		PromptCacheKey:    promptCacheKeyRaw,
-		EnableThinking:    req.EnableThinking,
-		ThinkingBudget:    req.ThinkingBudget,
-		THINKING:          req.THINKING,
+		Model:                req.Model,
+		Input:                inputRaw,
+		Instructions:         instructionsRaw,
+		Stream:               req.Stream,
+		Temperature:          req.Temperature,
+		Text:                 textRaw,
+		ToolChoice:           toolChoiceRaw,
+		Tools:                toolsRaw,
+		TopP:                 topP,
+		User:                 req.User,
+		ParallelToolCalls:    parallelToolCallsRaw,
+		Store:                req.Store,
+		Metadata:             req.Metadata,
+		PromptCacheKey:       append(json.RawMessage(nil), req.PromptCacheKey...),
+		PromptCacheRetention: append(json.RawMessage(nil), req.PromptCacheRetention...),
+		EnableThinking:       req.EnableThinking,
+		ThinkingBudget:       req.ThinkingBudget,
+		THINKING:             req.THINKING,
 	}
 	if req.MaxTokens != nil || req.MaxCompletionTokens != nil {
 		out.MaxOutputTokens = lo.ToPtr(maxOutputTokens)

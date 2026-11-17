@@ -40,15 +40,19 @@ func ResponsesRequestToChatCompletionsRequest(req *dto.OpenAIResponsesRequest) (
 	}
 
 	out := &dto.GeneralOpenAIRequest{
-		Model:          req.Model,
-		Stream:         req.Stream,
-		MaxTokens:      req.MaxOutputTokens,
-		Temperature:    req.Temperature,
-		TopP:           req.TopP,
-		Metadata:       req.Metadata,
-		EnableThinking: req.EnableThinking,
-		ThinkingBudget: req.ThinkingBudget,
-		THINKING:       req.THINKING,
+		Model:                req.Model,
+		Stream:               req.Stream,
+		MaxTokens:            req.MaxOutputTokens,
+		Temperature:          req.Temperature,
+		TopP:                 req.TopP,
+		Metadata:             req.Metadata,
+		User:                 req.User,
+		Store:                req.Store,
+		PromptCacheKey:       append(json.RawMessage(nil), req.PromptCacheKey...),
+		PromptCacheRetention: append(json.RawMessage(nil), req.PromptCacheRetention...),
+		EnableThinking:       req.EnableThinking,
+		ThinkingBudget:       req.ThinkingBudget,
+		THINKING:             req.THINKING,
 	}
 	format, verbosity, formatErr := responsesTextToChatFormat(req.Text)
 	if formatErr != nil {

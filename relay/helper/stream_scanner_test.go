@@ -3,6 +3,7 @@ package helper
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -125,6 +126,22 @@ func (r *errReadCloser) Close() error {
 	return nil
 }
 
+type dataThenErrorReadCloser struct {
+	data []byte
+	err  error
+	done bool
+}
+
+func (r *dataThenErrorReadCloser) Read(p []byte) (int, error) {
+	if r.done {
+		return 0, r.err
+	}
+	r.done = true
+	return copy(p, r.data), nil
+}
+
+func (r *dataThenErrorReadCloser) Close() error { return nil }
+
 // ---------- Basic correctness ----------
 
 func TestStreamScannerHandler_NilInputs(t *testing.T) {
@@ -240,6 +257,45 @@ func TestStreamScannerHandler_DoneStopsScanner(t *testing.T) {
 	}))
 
 	assert.Equal(t, int64(50), count.Load(), "data after [DONE] must not be processed")
+}
+
+func TestStreamScannerHandler_ResponseBodyClosedAfterDoneIsNormal(t *testing.T) {
+	t.Parallel()
+
+	c, resp, info := setupStreamTest(t, strings.NewReader(""))
+	resp.Body = &dataThenErrorReadCloser{
+		data: []byte("data: token\ndata: [DONE]\n"),
+		err:  errors.New("http2: response body closed"),
+	}
+
+	var count atomic.Int64
+	StreamScannerHandler(c, resp, info, acceptStreamHandler(func(data string, sr *StreamResult) {
+		count.Add(1)
+	}))
+
+	require.Equal(t, int64(1), count.Load())
+	require.NotNil(t, info.StreamStatus)
+	require.Equal(t, relaycommon.StreamEndReasonDone, info.StreamStatus.EndReason)
+	require.True(t, info.StreamStatus.IsNormalEnd())
+	require.False(t, info.StreamStatus.HasErrors())
+}
+
+func TestExpectedStreamCloseErrorIncludesHTTP2ResponseBodyClosed(t *testing.T) {
+	t.Parallel()
+	require.True(t, isExpectedStreamCloseError(errors.New("http2: response body closed")))
+}
+
+func TestStreamScannerHandler_ResponseBodyClosedBeforeDoneRemainsFailure(t *testing.T) {
+	t.Parallel()
+
+	c, resp, info := setupStreamTest(t, strings.NewReader(""))
+	resp.Body = &errReadCloser{err: errors.New("http2: response body closed")}
+
+	StreamScannerHandler(c, resp, info, acceptStreamHandler(func(data string, sr *StreamResult) {}))
+
+	require.NotNil(t, info.StreamStatus)
+	require.Equal(t, relaycommon.StreamEndReasonScannerErr, info.StreamStatus.EndReason)
+	require.False(t, info.StreamStatus.IsNormalEnd())
 }
 
 func TestStreamScannerHandler_StopStopsStream(t *testing.T) {
@@ -723,6 +779,17 @@ func TestPreOutputStreamErrorRejectsAcceptedButUndeliveredEOF(t *testing.T) {
 	require.NotNil(t, streamErr)
 	require.Equal(t, http.StatusBadGateway, streamErr.StatusCode)
 	require.False(t, ShouldFinalizeStream(info))
+}
+
+func TestPreOutputStreamErrorClientGoneStaysOutOfChannelErrorLog(t *testing.T) {
+	info := &relaycommon.RelayInfo{StreamStatus: &relaycommon.StreamStatus{EndReason: relaycommon.StreamEndReasonClientGone}}
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	streamErr := PreOutputStreamError(c, info)
+	require.NotNil(t, streamErr)
+	require.Equal(t, 499, streamErr.StatusCode)
+	require.True(t, types.IsSkipRetryError(streamErr))
+	require.False(t, types.IsRecordErrorLog(streamErr))
 }
 
 func TestStreamScannerHandler_UnexpectedEOFStillScannerError(t *testing.T) {

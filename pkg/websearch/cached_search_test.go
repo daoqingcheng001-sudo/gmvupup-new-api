@@ -27,13 +27,12 @@ func TestNativeCachedSearchPreservesProviderControls(t *testing.T) {
 
 func TestNativeCachedSearchCannotPromoteLiveTools(t *testing.T) {
 	for name, body := range map[string]string{
-		"duplicate":             `{"tools":[{"type":"web_search","external_web_access":false},{"type":"web_search"}]}`,
-		"live_fetch":            `{"tools":[{"type":"web_search","external_web_access":false},{"type":"web_fetch_20250910"}]}`,
-		"live_options":          `{"tools":[{"type":"web_search","external_web_access":false}],"web_search_options":{}}`,
-		"enable_search":         `{"tools":[{"type":"web_search","external_web_access":false}],"enable_search":true}`,
-		"string_false":          `{"tools":[{"type":"web_search","external_web_access":"false"}]}`,
-		"numeric_zero":          `{"tools":[{"type":"web_search","external_web_access":0}]}`,
-		"preview_ignores_false": `{"tools":[{"type":"web_search_preview","external_web_access":false}]}`,
+		"duplicate":     `{"tools":[{"type":"web_search","external_web_access":false},{"type":"web_search"}]}`,
+		"live_fetch":    `{"tools":[{"type":"web_search","external_web_access":false},{"type":"web_fetch_20250910"}]}`,
+		"live_options":  `{"tools":[{"type":"web_search","external_web_access":false}],"web_search_options":{}}`,
+		"enable_search": `{"tools":[{"type":"web_search","external_web_access":false}],"enable_search":true}`,
+		"string_false":  `{"tools":[{"type":"web_search","external_web_access":"false"}]}`,
+		"numeric_zero":  `{"tools":[{"type":"web_search","external_web_access":0}]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := NewPlan([]byte(body), "responses")
@@ -52,5 +51,22 @@ func TestLiveSearchStillUsesManagedDeepSeekPlan(t *testing.T) {
 		require.True(t, plan.Search)
 		require.True(t, plan.Fetch)
 		require.NoError(t, plan.Tools())
+	}
+}
+
+func TestResponsesPreviewIgnoresExternalAccessWithoutChangingOtherControls(t *testing.T) {
+	for _, typ := range []string{"web_search_preview", "web_search_preview_2025_03_11"} {
+		for _, flag := range []string{"false", "true", "null", `"false"`, "0"} {
+			body := []byte(fmt.Sprintf(`{"tools":[{"type":%q,"external_web_access":%s}],"prompt_cache_key":"private-cache","prompt_cache_retention":"24h"}`, typ, flag))
+			plan, err := NewPlan(body, "responses")
+			require.NoError(t, err)
+			require.False(t, plan.NativeCachedSearch)
+			require.True(t, plan.Search)
+			require.NoError(t, plan.Tools())
+			require.Equal(t, "private-cache", Text(plan.Body["prompt_cache_key"]))
+			require.Equal(t, "24h", Text(plan.Body["prompt_cache_retention"]))
+		}
+		_, err := NewPlan([]byte(fmt.Sprintf(`{"tools":[{"type":%q,"external_web_access":false,"user_location":{"city":"Paris"}}]}`, typ)), "responses")
+		require.ErrorContains(t, err, "user_location")
 	}
 }

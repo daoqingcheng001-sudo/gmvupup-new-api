@@ -52,17 +52,20 @@ func inboundRequestID(c *gin.Context) string {
 
 func RequestId() func(c *gin.Context) {
 	return func(c *gin.Context) {
-		internalID := common.NewRequestId()
+		attemptID := common.NewRequestId()
 		id := inboundRequestID(c)
 		if id == "" {
-			id = internalID
+			id = attemptID
 		}
 		c.Set(common.RequestIdKey, id)
-		c.Set(common.InternalRequestIdKey, internalID)
+		c.Set(common.AttemptIdKey, attemptID)
+		c.Set(common.InternalRequestIdKey, attemptID)
 		ctx := context.WithValue(c.Request.Context(), common.RequestIdKey, id)
-		ctx = context.WithValue(ctx, common.InternalRequestIdKey, internalID)
+		ctx = context.WithValue(ctx, common.AttemptIdKey, attemptID)
+		ctx = context.WithValue(ctx, common.InternalRequestIdKey, attemptID)
 		c.Request = c.Request.WithContext(ctx)
 		c.Header(common.RequestIdKey, id)
+		c.Header(common.AttemptIdKey, attemptID)
 		c.Next()
 	}
 }

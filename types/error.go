@@ -519,6 +519,14 @@ func ErrOptionWithNoRecordErrorLog() NewAPIErrorOptions {
 	}
 }
 
+// ErrOptionWithNoChannelErrorLog keeps expected local/client cancellations out
+// of the channel error list. It is an explicit name for the relay boundary;
+// callers that merely need to suppress any persisted error record may continue
+// using ErrOptionWithNoRecordErrorLog.
+func ErrOptionWithNoChannelErrorLog() NewAPIErrorOptions {
+	return ErrOptionWithNoRecordErrorLog()
+}
+
 func ErrOptionWithStatusCode(statusCode int) NewAPIErrorOptions {
 	return func(e *NewAPIError) {
 		e.StatusCode = statusCode

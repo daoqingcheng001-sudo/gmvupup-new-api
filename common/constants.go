@@ -164,7 +164,10 @@ var GeminiSafetySetting string
 var CohereSafetySetting string
 
 const (
-	RequestIdKey         = "X-Oneapi-Request-Id"
+	RequestIdKey = "X-Oneapi-Request-Id"
+	AttemptIdKey = "X-Oneapi-Attempt-Id"
+	// InternalRequestIdKey is kept for compatibility with code that consumed
+	// the pre-Attempt-ID internal context value.
 	InternalRequestIdKey = "X-Oneapi-Internal-Request-Id"
 	UpstreamRequestIdKey = "X-Upstream-Request-Id"
 )

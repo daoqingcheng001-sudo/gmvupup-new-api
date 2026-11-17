@@ -83,7 +83,7 @@ func TestManagedWebRelaySettlesModelRoundsAndSearchExactlyOnce(t *testing.T) {
 				t.Run(fmt.Sprintf("%s/stream=%t/group=%v", protocol, stream, group), func(t *testing.T) {
 					user, token := setupMidjourneyBillingTest(t, 1000000, 1000000)
 					path, format, mode := "/v1/responses", types.RelayFormat(types.RelayFormatOpenAIResponses), relayconstant.RelayModeResponses
-					body := fmt.Sprintf(`{"model":"gpt-6.1-sol","input":"search fixture","tools":[{"type":"web_search"}],"stream":%t}`, stream)
+					body := fmt.Sprintf(`{"model":"gpt-6.1-sol","input":"search fixture","prompt_cache_key":"private-cache-fixture","prompt_cache_retention":"24h","tools":[{"type":"web_search_preview","external_web_access":false}],"stream":%t}`, stream)
 					first := `{"id":"r1","object":"response","model":"gpt-6.1-sol","status":"completed","output":[{"type":"function_call","id":"fc1","call_id":"c1","name":"newapi_web_search","arguments":"{\"query\":\"fixture\"}"}],"usage":{"input_tokens":10,"output_tokens":2}}`
 					last := `{"id":"r2","object":"response","model":"gpt-6.1-sol","status":"completed","output":[{"type":"message","id":"m1","role":"assistant","content":[{"type":"output_text","text":"answer https://example.com","annotations":[]}]}],"usage":{"input_tokens":10,"output_tokens":2}}`
 					if protocol == "claude" {
@@ -117,6 +117,11 @@ func TestManagedWebRelaySettlesModelRoundsAndSearchExactlyOnce(t *testing.T) {
 						require.NoError(t, err)
 						require.Equal(t, "gpt-6.1-sol", gjson.GetBytes(raw, "model").String())
 						require.NotContains(t, string(raw), `"type":"web_search"`)
+						if protocol == "responses" {
+							require.NotContains(t, string(raw), `"type":"web_search_preview"`)
+							require.Equal(t, "private-cache-fixture", gjson.GetBytes(raw, "prompt_cache_key").String())
+							require.Equal(t, "24h", gjson.GetBytes(raw, "prompt_cache_retention").String())
+						}
 						if rounds == 2 {
 							require.Contains(t, string(raw), "verified fixture")
 						}

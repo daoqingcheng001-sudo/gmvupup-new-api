@@ -55,6 +55,7 @@ func main() {
 
 	common.SysLog("New API " + common.Version + " started")
 	defer service.CloseImageResultCache()
+	service.StartRequestBodyAdmissionMonitor()
 	if os.Getenv("GIN_MODE") != "debug" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -211,6 +212,9 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		common.SysError(fmt.Sprintf("server forced to shutdown: %v", err))
 	}
+	if err := common.CheckpointRequestBodyMetrics(); err != nil {
+		common.SysError(fmt.Sprintf("failed to checkpoint request body metrics during shutdown: %v", err))
+	}
 	// 内存中的看板数据保存入库，避免重启丢失未落库数据 (issue #5679)
 	if common.DataExportEnabled {
 		model.SaveQuotaDataCache()
@@ -295,6 +299,9 @@ func InitResources() error {
 
 	// Initialize options, should after model.InitDB()
 	model.InitOptionMap()
+
+	// Restore durable request-body admission counters before accepting traffic.
+	common.StartRequestBodyMetricsPersistence()
 
 	// 清理旧的磁盘缓存文件
 	common.CleanupOldCacheFiles()

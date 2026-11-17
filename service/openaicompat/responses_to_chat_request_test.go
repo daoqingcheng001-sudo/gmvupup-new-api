@@ -1,6 +1,7 @@
 package openaicompat
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -65,10 +66,12 @@ func TestResponsesRequestToChatCompletionsRequestPreservesAgentTurns(t *testing.
 
 func TestChatCompletionsRequestToResponsesRequestPreservesPromptCacheKey(t *testing.T) {
 	key := "session-\"quoted\"\\path\n世界"
+	keyRaw, err := common.Marshal(key)
+	require.NoError(t, err)
 	got, err := ChatCompletionsRequestToResponsesRequest(&dto.GeneralOpenAIRequest{
 		Model:          "gpt-test",
 		Messages:       []dto.Message{{Role: "user", Content: "hello"}},
-		PromptCacheKey: key,
+		PromptCacheKey: keyRaw,
 	})
 	require.NoError(t, err)
 	encoded, err := common.Marshal(got)
@@ -127,4 +130,36 @@ func TestResponsesToolMediaFollowsEntireResultBatch(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `[{"ok":true}]`, raw)
 	require.Empty(t, media)
+}
+
+// Check the serialized request: absent, null and empty controls are distinct
+// upstream contracts, including when the caller changes protocol.
+func TestCacheControlsSurviveProtocolConversion(t *testing.T) {
+	for _, controls := range []string{``, `,"prompt_cache_key":null,"prompt_cache_retention":null`, `,"prompt_cache_key":"","prompt_cache_retention":""`, `,"prompt_cache_key":"session","prompt_cache_retention":"24h"`} {
+		for _, direction := range []string{"chat_to_responses", "responses_to_chat"} {
+			t.Run(direction+controls, func(t *testing.T) {
+				var converted any
+				var err error
+				if direction == "chat_to_responses" {
+					var req dto.GeneralOpenAIRequest
+					require.NoError(t, common.Unmarshal([]byte(`{"model":"gpt-test","messages":[{"role":"user","content":"hello"}],"store":false,"user":"synthetic"`+controls+`}`), &req))
+					converted, err = ChatCompletionsRequestToResponsesRequest(&req)
+				} else {
+					var req dto.OpenAIResponsesRequest
+					require.NoError(t, common.Unmarshal([]byte(`{"model":"gpt-test","input":"hello","store":false,"user":"synthetic"`+controls+`}`), &req))
+					converted, err = ResponsesRequestToChatCompletionsRequest(&req)
+				}
+				require.NoError(t, err)
+				encoded, err := common.Marshal(converted)
+				require.NoError(t, err)
+				var actual map[string]json.RawMessage
+				require.NoError(t, common.Unmarshal(encoded, &actual))
+				var expected map[string]json.RawMessage
+				require.NoError(t, common.Unmarshal([]byte(`{"store":false,"user":"synthetic"`+controls+`}`), &expected))
+				for _, field := range []string{"prompt_cache_key", "prompt_cache_retention", "store", "user"} {
+					require.Equal(t, string(expected[field]), string(actual[field]), field)
+				}
+			})
+		}
+	}
 }

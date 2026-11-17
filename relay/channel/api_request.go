@@ -862,6 +862,7 @@ func classifyDoRequestError(c *gin.Context, err error, requestMayHaveBeenSent bo
 				types.ErrorCodeDoRequestFailed,
 				statusClientClosedRequest,
 				types.ErrOptionWithSkipRetry(),
+				types.ErrOptionWithNoChannelErrorLog(),
 			)
 		case errors.Is(requestErr, context.DeadlineExceeded):
 			setRelayCancelOrigin(c, constant2.RelayCancelOriginGatewayDeadline)
@@ -1051,6 +1052,10 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 				nonStreamTimeout = common2.RelayNonStreamTimeout
 				nonStreamRemaining = remaining
 			}
+		}
+		// Use only the server-generated attempt identity.
+		if attemptID := c.GetString(common2.AttemptIdKey); attemptID != "" {
+			req.Header.Set(common2.AttemptIdKey, attemptID)
 		}
 		combinedCtx, cancel = context.WithCancel(req.Context())
 		combinedCancel = cancel

@@ -50,7 +50,7 @@ func TestNativeCachedSearchRelayKeepsProviderAndBilling(t *testing.T) {
 			for _, group := range []int{1, 3} {
 				t.Run(fmt.Sprintf("stream=%t/search=%t/group=%d", stream, searched, group), func(t *testing.T) {
 					user, token := setupMidjourneyBillingTest(t, 1000000, 1000000)
-					body := fmt.Sprintf(`{"model":"gpt-6.1-sol","input":"fixture mentions ws_na_ as ordinary text","temperature":0,"stream":%t,"tools":[{"type":"web_search","external_web_access":false,"user_location":{"type":"approximate","city":"Paris"}},{"type":"function","name":"local_read","parameters":{"type":"object"}}],"tool_choice":"auto"}`, stream)
+					body := fmt.Sprintf(`{"model":"gpt-6.1-sol","input":"fixture mentions ws_na_ as ordinary text","prompt_cache_key":"private-cache-fixture","prompt_cache_retention":"24h","temperature":0,"stream":%t,"tools":[{"type":"web_search","external_web_access":false,"user_location":{"type":"approximate","city":"Paris"}},{"type":"function","name":"local_read","parameters":{"type":"object"}}],"tool_choice":"auto"}`, stream)
 					recorder := httptest.NewRecorder()
 					c, _ := gin.CreateTestContext(recorder)
 					c.Request = httptest.NewRequest("POST", "/v1/responses", strings.NewReader(body))
@@ -113,6 +113,16 @@ func TestNativeCachedSearchRelayKeepsProviderAndBilling(t *testing.T) {
 					require.Equal(t, "0", gjson.GetBytes(upstream, "temperature").Raw)
 					require.Equal(t, stream, gjson.GetBytes(upstream, "stream").Bool())
 					require.NotContains(t, string(upstream), websearch.SearchFunction)
+					require.Equal(t, "private-cache-fixture", gjson.GetBytes(upstream, "prompt_cache_key").String())
+					require.Equal(t, "24h", gjson.GetBytes(upstream, "prompt_cache_retention").String())
+					admin := map[string]interface{}{}
+					service.AppendRelayObservabilityAdminInfo(c, info, admin)
+					encoded, err := common.Marshal(admin)
+					require.NoError(t, err)
+					require.NotContains(t, string(encoded), "private-cache-fixture")
+					require.Equal(t, "native_cached", gjson.GetBytes(encoded, "web_search_mode").String())
+					require.Equal(t, "string", gjson.GetBytes(encoded, "request_controls.prompt_cache_key_type").String())
+					require.EqualValues(t, 1, gjson.GetBytes(encoded, "request_controls.external_access_false").Int())
 					require.Contains(t, recorder.Body.String(), "fixture answer")
 					searches, fee := 0, 0
 					if searched {

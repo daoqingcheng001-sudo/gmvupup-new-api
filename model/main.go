@@ -27,6 +27,19 @@ var commonFalseVal string
 var logKeyCol string
 var logGroupCol string
 
+// jsonScanBytes normalizes JSON columns returned by different drivers and
+// PostgreSQL protocol modes.
+func jsonScanBytes(value interface{}) []byte {
+	switch v := value.(type) {
+	case []byte:
+		return v
+	case string:
+		return []byte(v)
+	default:
+		return nil
+	}
+}
+
 func initCol() {
 	// init common column names
 	if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
@@ -417,6 +430,9 @@ func migrateClickHouseLogDB() error {
 	if err := LOG_DB.Exec(clickHouseLogCreateTableSQL(ttlDays)).Error; err != nil {
 		return err
 	}
+	if err := LOG_DB.Exec("ALTER TABLE logs ADD COLUMN IF NOT EXISTS attempt_id String DEFAULT '' AFTER request_id").Error; err != nil {
+		return err
+	}
 	return syncClickHouseLogTTL(ttlDays)
 }
 
@@ -464,6 +480,7 @@ CREATE TABLE IF NOT EXISTS logs (
 	`+"`group`"+` String DEFAULT '',
 	ip String DEFAULT '',
 	request_id String DEFAULT '',
+	attempt_id String DEFAULT '',
 	upstream_request_id String DEFAULT '',
 	other String DEFAULT ''
 )

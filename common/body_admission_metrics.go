@@ -1,6 +1,7 @@
 package common
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -188,5 +189,8 @@ func ResetRequestBodyStats() {
 	requestBodyMetrics.maxAdmissionHoldNanoseconds.Store(0)
 	for index := range requestBodyMetrics.admissionHoldBuckets {
 		requestBodyMetrics.admissionHoldBuckets[index].Store(0)
+	}
+	if err := CheckpointRequestBodyMetrics(); err != nil {
+		SysError(fmt.Sprintf("failed to persist reset request body metrics: %s", err.Error()))
 	}
 }

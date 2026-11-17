@@ -86,6 +86,7 @@ func requireClientCanceledRequestError(t *testing.T, err error) *types.NewAPIErr
 	require.True(t, errors.As(err, &apiErr))
 	require.Equal(t, statusClientClosedRequest, apiErr.StatusCode)
 	require.True(t, types.IsSkipRetryError(apiErr))
+	require.False(t, types.IsRecordErrorLog(apiErr))
 
 	previousAutoDisable := common2.AutomaticDisableChannelEnabled
 	common2.AutomaticDisableChannelEnabled = true
@@ -1127,10 +1128,11 @@ func TestDoRequestPropagatesValidatedRequestIDWithoutOverwritingAdaptorValue(t *
 	type requestIDs struct {
 		canonical string
 		standard  string
+		attempt   string
 	}
 	seenIDs := make(chan requestIDs, 2)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		seenIDs <- requestIDs{canonical: r.Header.Get(common2.RequestIdKey), standard: r.Header.Get("X-Request-Id")}
+		seenIDs <- requestIDs{canonical: r.Header.Get(common2.RequestIdKey), standard: r.Header.Get("X-Request-Id"), attempt: r.Header.Get(common2.AttemptIdKey)}
 		w.Header().Set("X-Request-Id", "cpa-request-456")
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -1147,8 +1149,10 @@ func TestDoRequestPropagatesValidatedRequestIDWithoutOverwritingAdaptorValue(t *
 		t.Run(test.name, func(t *testing.T) {
 			c, _, _ := newContextTestGinContext(t)
 			c.Set(common2.RequestIdKey, "edge-trace-123")
+			c.Set(common2.AttemptIdKey, "server-attempt-456")
 			req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, upstream.URL, nil)
 			require.NoError(t, err)
+			req.Header.Set(common2.AttemptIdKey, "untrusted-client-attempt")
 			if test.preset != "" {
 				req.Header.Set(common2.RequestIdKey, test.preset)
 			}
@@ -1159,6 +1163,7 @@ func TestDoRequestPropagatesValidatedRequestIDWithoutOverwritingAdaptorValue(t *
 			seen := <-seenIDs
 			require.Equal(t, test.wantHeader, seen.canonical)
 			require.Equal(t, "edge-trace-123", seen.standard)
+			require.Equal(t, "server-attempt-456", seen.attempt)
 			require.Equal(t, "cpa-request-456", c.GetString(common2.UpstreamRequestIdKey))
 		})
 	}

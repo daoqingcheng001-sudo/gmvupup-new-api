@@ -24,6 +24,17 @@ type PerformanceSetting struct {
 	MonitorMemoryThreshold int `json:"monitor_memory_threshold"`
 	// MonitorDiskThreshold 磁盘使用率阈值（%）
 	MonitorDiskThreshold int `json:"monitor_disk_threshold"`
+
+	// RequestBodyAlertEnabled 是否启用大请求体容量主动告警
+	RequestBodyAlertEnabled bool `json:"request_body_alert_enabled"`
+	// RequestBodyAlertSlotUsageThreshold 大请求体槽位使用率告警阈值（%）
+	RequestBodyAlertSlotUsageThreshold int `json:"request_body_alert_slot_usage_threshold"`
+	// RequestBodyAlertCooldownSeconds 同类容量告警冷却时间（秒）
+	RequestBodyAlertCooldownSeconds int `json:"request_body_alert_cooldown_seconds"`
+	// RequestBodyMetricsPersistenceEnabled 是否持久化请求体容量累计指标
+	RequestBodyMetricsPersistenceEnabled bool `json:"request_body_metrics_persistence_enabled"`
+	// RequestBodyMetricsPersistenceIntervalSeconds 指标持久化间隔（秒）
+	RequestBodyMetricsPersistenceIntervalSeconds int `json:"request_body_metrics_persistence_interval_seconds"`
 }
 
 // 默认配置
@@ -37,6 +48,12 @@ var performanceSetting = PerformanceSetting{
 	MonitorCPUThreshold:    90,
 	MonitorMemoryThreshold: 90,
 	MonitorDiskThreshold:   95,
+
+	RequestBodyAlertEnabled:                      false,
+	RequestBodyAlertSlotUsageThreshold:           80,
+	RequestBodyAlertCooldownSeconds:              600,
+	RequestBodyMetricsPersistenceEnabled:         true,
+	RequestBodyMetricsPersistenceIntervalSeconds: 30,
 }
 
 func init() {
@@ -56,10 +73,15 @@ func syncToCommon() {
 	})
 
 	common.SetPerformanceMonitorConfig(common.PerformanceMonitorConfig{
-		Enabled:         performanceSetting.MonitorEnabled,
-		CPUThreshold:    performanceSetting.MonitorCPUThreshold,
-		MemoryThreshold: performanceSetting.MonitorMemoryThreshold,
-		DiskThreshold:   performanceSetting.MonitorDiskThreshold,
+		Enabled:                                   performanceSetting.MonitorEnabled,
+		CPUThreshold:                              performanceSetting.MonitorCPUThreshold,
+		MemoryThreshold:                           performanceSetting.MonitorMemoryThreshold,
+		DiskThreshold:                             performanceSetting.MonitorDiskThreshold,
+		RequestBodyAlertEnabled:                   performanceSetting.RequestBodyAlertEnabled,
+		RequestBodyAlertSlotUsageThreshold:        performanceSetting.RequestBodyAlertSlotUsageThreshold,
+		RequestBodyAlertCooldownSeconds:           performanceSetting.RequestBodyAlertCooldownSeconds,
+		RequestBodyMetricsPersistenceEnabled:      performanceSetting.RequestBodyMetricsPersistenceEnabled,
+		RequestBodyMetricsPersistenceIntervalSecs: performanceSetting.RequestBodyMetricsPersistenceIntervalSeconds,
 	})
 }
 

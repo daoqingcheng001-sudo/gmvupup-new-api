@@ -24,6 +24,8 @@ type PerformanceStats struct {
 	RequestBodyStats common.RequestBodyStats `json:"request_body_stats"`
 	// 用户鉴权缓存与数据库回源统计
 	UserCacheStats common.UserCacheStats `json:"user_cache_stats"`
+	// 请求体容量指标持久化状态
+	RequestBodyMetricsPersistence common.RequestBodyMetricsPersistenceStatus `json:"request_body_metrics_persistence"`
 	// 系统内存统计
 	MemoryStats MemoryStats `json:"memory_stats"`
 	// 磁盘缓存目录信息
@@ -81,6 +83,16 @@ type PerformanceConfig struct {
 	MonitorMemoryThreshold int `json:"monitor_memory_threshold"`
 	// MonitorDiskThreshold 磁盘使用率阈值（%）
 	MonitorDiskThreshold int `json:"monitor_disk_threshold"`
+	// RequestBodyAlertEnabled 是否启用大请求体容量主动告警
+	RequestBodyAlertEnabled bool `json:"request_body_alert_enabled"`
+	// RequestBodyAlertSlotUsageThreshold 大请求体槽位使用率告警阈值（%）
+	RequestBodyAlertSlotUsageThreshold int `json:"request_body_alert_slot_usage_threshold"`
+	// RequestBodyAlertCooldownSeconds 同类容量告警冷却时间（秒）
+	RequestBodyAlertCooldownSeconds int `json:"request_body_alert_cooldown_seconds"`
+	// RequestBodyMetricsPersistenceEnabled 是否持久化请求体容量累计指标
+	RequestBodyMetricsPersistenceEnabled bool `json:"request_body_metrics_persistence_enabled"`
+	// RequestBodyMetricsPersistenceIntervalSeconds 指标持久化间隔（秒）
+	RequestBodyMetricsPersistenceIntervalSeconds int `json:"request_body_metrics_persistence_interval_seconds"`
 }
 
 // GetPerformanceStats 获取性能统计信息
@@ -102,15 +114,20 @@ func GetPerformanceStats(c *gin.Context) {
 	diskConfig := common.GetDiskCacheConfig()
 	monitorConfig := common.GetPerformanceMonitorConfig()
 	config := PerformanceConfig{
-		DiskCacheEnabled:       diskConfig.Enabled,
-		DiskCacheThresholdMB:   diskConfig.ThresholdMB,
-		DiskCacheMaxSizeMB:     diskConfig.MaxSizeMB,
-		DiskCachePath:          diskConfig.Path,
-		IsRunningInContainer:   common.IsRunningInContainer(),
-		MonitorEnabled:         monitorConfig.Enabled,
-		MonitorCPUThreshold:    monitorConfig.CPUThreshold,
-		MonitorMemoryThreshold: monitorConfig.MemoryThreshold,
-		MonitorDiskThreshold:   monitorConfig.DiskThreshold,
+		DiskCacheEnabled:                             diskConfig.Enabled,
+		DiskCacheThresholdMB:                         diskConfig.ThresholdMB,
+		DiskCacheMaxSizeMB:                           diskConfig.MaxSizeMB,
+		DiskCachePath:                                diskConfig.Path,
+		IsRunningInContainer:                         common.IsRunningInContainer(),
+		MonitorEnabled:                               monitorConfig.Enabled,
+		MonitorCPUThreshold:                          monitorConfig.CPUThreshold,
+		MonitorMemoryThreshold:                       monitorConfig.MemoryThreshold,
+		MonitorDiskThreshold:                         monitorConfig.DiskThreshold,
+		RequestBodyAlertEnabled:                      monitorConfig.RequestBodyAlertEnabled,
+		RequestBodyAlertSlotUsageThreshold:           monitorConfig.RequestBodyAlertSlotUsageThreshold,
+		RequestBodyAlertCooldownSeconds:              monitorConfig.RequestBodyAlertCooldownSeconds,
+		RequestBodyMetricsPersistenceEnabled:         monitorConfig.RequestBodyMetricsPersistenceEnabled,
+		RequestBodyMetricsPersistenceIntervalSeconds: monitorConfig.RequestBodyMetricsPersistenceIntervalSecs,
 	}
 
 	// 获取磁盘空间信息
@@ -126,9 +143,10 @@ func GetPerformanceStats(c *gin.Context) {
 	diskSpaceInfo = common.GetDiskSpaceInfo()
 
 	stats := PerformanceStats{
-		CacheStats:       cacheStats,
-		RequestBodyStats: requestBodyStats,
-		UserCacheStats:   userCacheStats,
+		CacheStats:                    cacheStats,
+		RequestBodyStats:              requestBodyStats,
+		UserCacheStats:                userCacheStats,
+		RequestBodyMetricsPersistence: common.GetRequestBodyMetricsPersistenceStatus(),
 		MemoryStats: MemoryStats{
 			Alloc:        memStats.Alloc,
 			TotalAlloc:   memStats.TotalAlloc,

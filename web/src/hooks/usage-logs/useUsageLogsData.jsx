@@ -106,6 +106,7 @@ export const useLogsData = () => {
     channel: '',
     group: '',
     request_id: '',
+    attempt_id: '',
     dateRange: [
       timestamp2string(getTodayStartTimestamp()),
       timestamp2string(now.getTime() / 1000 + 3600),
@@ -264,6 +265,7 @@ export const useLogsData = () => {
       channel: formValues.channel || '',
       group: formValues.group || '',
       request_id: formValues.request_id || '',
+      attempt_id: formValues.attempt_id || '',
       logType: formValues.logType ? parseInt(formValues.logType) : 0,
     };
   };
@@ -301,6 +303,7 @@ export const useLogsData = () => {
       channel,
       group,
       request_id,
+      attempt_id,
       logType: formLogType,
     } = getFormValues();
 
@@ -320,6 +323,7 @@ export const useLogsData = () => {
       channel,
       group,
       request_id,
+      attempt_id,
       logType: currentLogType,
     };
   };
@@ -336,6 +340,7 @@ export const useLogsData = () => {
       end_timestamp: filters.end_timestamp,
       group: filters.group,
       request_id: filters.request_id,
+      attempt_id: filters.attempt_id,
     };
 
     if (isAdminUser) {
@@ -472,6 +477,12 @@ export const useLogsData = () => {
         expandDataLocal.push({
           key: t('Request ID'),
           value: logs[i].request_id,
+        });
+      }
+      if (logs[i].attempt_id) {
+        expandDataLocal.push({
+          key: t('Attempt ID'),
+          value: logs[i].attempt_id,
         });
       }
       if (other?.ws || other?.audio) {

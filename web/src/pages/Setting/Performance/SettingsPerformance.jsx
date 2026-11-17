@@ -72,6 +72,11 @@ export default function SettingsPerformance(props) {
     'performance_setting.monitor_cpu_threshold': 90,
     'performance_setting.monitor_memory_threshold': 90,
     'performance_setting.monitor_disk_threshold': 95,
+    'performance_setting.request_body_alert_enabled': true,
+    'performance_setting.request_body_alert_slot_usage_threshold': 80,
+    'performance_setting.request_body_alert_cooldown_seconds': 600,
+    'performance_setting.request_body_metrics_persistence_enabled': true,
+    'performance_setting.request_body_metrics_persistence_interval_seconds': 30,
   });
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
@@ -186,7 +191,11 @@ export default function SettingsPerformance(props) {
   }
 
   async function cleanupLogFiles() {
-    if (logCleanupValue == null || isNaN(logCleanupValue) || logCleanupValue < 1) {
+    if (
+      logCleanupValue == null ||
+      isNaN(logCleanupValue) ||
+      logCleanupValue < 1
+    ) {
       showError(t('请输入有效的数值'));
       return;
     }
@@ -243,6 +252,16 @@ export default function SettingsPerformance(props) {
           (stats.cache_stats.current_disk_usage_bytes /
             stats.cache_stats.disk_cache_max_bytes) *
           100
+        ).toFixed(1)
+      : 0;
+
+  const requestBodySlotUsagePercent =
+    stats?.request_body_stats?.large_body_slot_limit > 0
+      ? Math.min(
+          100,
+          (stats.request_body_stats.active_large_body_slots /
+            stats.request_body_stats.large_body_slot_limit) *
+            100,
         ).toFixed(1)
       : 0;
 
@@ -395,6 +414,93 @@ export default function SettingsPerformance(props) {
               </Button>
             </Row>
           </Form.Section>
+
+          <Form.Section text={t('大请求体容量监控')}>
+            <Banner
+              type='warning'
+              description={t(
+                '容量拒绝会立即通知 Root 用户；槽位高占用需连续三次采样达到阈值才通知。累计指标会写入持久卷，进程重启后自动恢复。',
+              )}
+              style={{ marginBottom: 16 }}
+            />
+            <Row gutter={16}>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Switch
+                  field={'performance_setting.request_body_alert_enabled'}
+                  label={t('启用容量主动告警')}
+                  extraText={t('使用 Root 用户通知渠道')}
+                  onChange={handleFieldChange(
+                    'performance_setting.request_body_alert_enabled',
+                  )}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.InputNumber
+                  field={
+                    'performance_setting.request_body_alert_slot_usage_threshold'
+                  }
+                  label={t('槽位告警阈值 (%)')}
+                  min={1}
+                  max={100}
+                  onChange={handleFieldChange(
+                    'performance_setting.request_body_alert_slot_usage_threshold',
+                  )}
+                  disabled={
+                    !inputs['performance_setting.request_body_alert_enabled']
+                  }
+                />
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.InputNumber
+                  field={
+                    'performance_setting.request_body_alert_cooldown_seconds'
+                  }
+                  label={t('告警冷却时间 (秒)')}
+                  min={1}
+                  onChange={handleFieldChange(
+                    'performance_setting.request_body_alert_cooldown_seconds',
+                  )}
+                  disabled={
+                    !inputs['performance_setting.request_body_alert_enabled']
+                  }
+                />
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Switch
+                  field={
+                    'performance_setting.request_body_metrics_persistence_enabled'
+                  }
+                  label={t('持久化容量指标')}
+                  extraText={t('避免进程重启后累计值清零')}
+                  onChange={handleFieldChange(
+                    'performance_setting.request_body_metrics_persistence_enabled',
+                  )}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.InputNumber
+                  field={
+                    'performance_setting.request_body_metrics_persistence_interval_seconds'
+                  }
+                  label={t('指标落盘间隔 (秒)')}
+                  min={1}
+                  onChange={handleFieldChange(
+                    'performance_setting.request_body_metrics_persistence_interval_seconds',
+                  )}
+                  disabled={
+                    !inputs[
+                      'performance_setting.request_body_metrics_persistence_enabled'
+                    ]
+                  }
+                />
+              </Col>
+            </Row>
+            <Row>
+              <Button size='default' onClick={onSubmit}>
+                {t('保存容量监控设置')}
+              </Button>
+            </Row>
+          </Form.Section>
         </Form>
       </Spin>
 
@@ -474,24 +580,24 @@ export default function SettingsPerformance(props) {
                   >
                     &nbsp;
                   </Text>
-                <Popconfirm
-                  title={t('确认清理日志文件？')}
-                  content={
-                    logCleanupMode === 'by_count'
-                      ? t(
-                          '将只保留最近 {{value}} 个日志文件，其余将被删除。',
-                          { value: logCleanupValue },
-                        )
-                      : t('将删除 {{value}} 天前的日志文件。', {
-                          value: logCleanupValue,
-                        })
-                  }
-                  onConfirm={cleanupLogFiles}
-                >
-                  <Button type='danger' loading={logCleanupLoading}>
-                    {t('清理日志文件')}
-                  </Button>
-                </Popconfirm>
+                  <Popconfirm
+                    title={t('确认清理日志文件？')}
+                    content={
+                      logCleanupMode === 'by_count'
+                        ? t(
+                            '将只保留最近 {{value}} 个日志文件，其余将被删除。',
+                            { value: logCleanupValue },
+                          )
+                        : t('将删除 {{value}} 天前的日志文件。', {
+                            value: logCleanupValue,
+                          })
+                    }
+                    onConfirm={cleanupLogFiles}
+                  >
+                    <Button type='danger' loading={logCleanupLoading}>
+                      {t('清理日志文件')}
+                    </Button>
+                  </Popconfirm>
                 </div>
               </Col>
             </Row>
@@ -684,6 +790,94 @@ export default function SettingsPerformance(props) {
                           style={{ marginTop: 8 }}
                         />
                       )}
+                    </div>
+                  </Col>
+                </Row>
+              )}
+
+              {/* 大请求体容量统计 */}
+              {stats.request_body_stats && (
+                <Row gutter={16} style={{ marginBottom: 16 }}>
+                  <Col span={24}>
+                    <div
+                      style={{
+                        padding: 16,
+                        background: 'var(--semi-color-fill-0)',
+                        borderRadius: 8,
+                      }}
+                    >
+                      <Text
+                        strong
+                        style={{ marginBottom: 8, display: 'block' }}
+                      >
+                        {t('大请求体容量')}
+                      </Text>
+                      <Progress
+                        percent={parseFloat(requestBodySlotUsagePercent)}
+                        showInfo
+                        style={{ marginBottom: 12 }}
+                        stroke={
+                          parseFloat(requestBodySlotUsagePercent) >=
+                          inputs[
+                            'performance_setting.request_body_alert_slot_usage_threshold'
+                          ]
+                            ? 'var(--semi-color-danger)'
+                            : 'var(--semi-color-primary)'
+                        }
+                      />
+                      <Descriptions
+                        data={[
+                          {
+                            key: t('当前槽位'),
+                            value: `${stats.request_body_stats.active_large_body_slots} / ${stats.request_body_stats.large_body_slot_limit}`,
+                          },
+                          {
+                            key: t('累计容量拒绝'),
+                            value:
+                              stats.request_body_stats
+                                .rejected_large_body_admissions_total,
+                          },
+                          {
+                            key: t('累计请求体'),
+                            value:
+                              stats.request_body_stats.observed_bodies_total,
+                          },
+                          {
+                            key: t('最大请求体'),
+                            value: formatBytes(
+                              stats.request_body_stats.max_observed_body_bytes,
+                            ),
+                          },
+                          {
+                            key: t('最大槽位持有时间'),
+                            value: `${Number(
+                              stats.request_body_stats
+                                .admission_hold_duration_seconds_max || 0,
+                            ).toFixed(3)}s`,
+                          },
+                          {
+                            key: t('持久化状态'),
+                            value: stats.request_body_metrics_persistence
+                              ?.enabled
+                              ? stats.request_body_metrics_persistence.restored
+                                ? t('已启用并已恢复历史指标')
+                                : stats.request_body_metrics_persistence
+                                      .last_checkpoint_at
+                                  ? t('已启用并已落盘')
+                                  : t('已启用，等待首次落盘')
+                              : t('未启用'),
+                          },
+                          {
+                            key: t('最近落盘时间'),
+                            value: stats.request_body_metrics_persistence
+                              ?.last_checkpoint_at
+                              ? new Date(
+                                  stats.request_body_metrics_persistence.last_checkpoint_at,
+                                ).toLocaleString()
+                              : '-',
+                          },
+                        ]}
+                      />
                     </div>
                   </Col>
                 </Row>

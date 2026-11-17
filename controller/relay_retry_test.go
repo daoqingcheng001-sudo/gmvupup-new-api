@@ -469,3 +469,21 @@ func TestGPTFallbackContinuesWithinUnifiedRetryBudget(t *testing.T) {
 		t.Fatal("unsafe GPT fallback must stop")
 	}
 }
+
+func TestIsNormalClientCancellation(t *testing.T) {
+	clientCanceled := types.NewErrorWithStatusCode(
+		errors.New("request canceled by client"), types.ErrorCodeDoRequestFailed, 499,
+		types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoChannelErrorLog(),
+	)
+	if !isNormalClientCancellation(clientCanceled) {
+		t.Fatal("expected a 499 no-penalty cancellation to use info-level handling")
+	}
+
+	channelFailure := types.NewErrorWithStatusCode(
+		errors.New("upstream failed"), types.ErrorCodeBadResponse, 499,
+		types.ErrOptionWithSkipRetry(), types.ErrOptionWithChannelPenalty(),
+	)
+	if isNormalClientCancellation(channelFailure) {
+		t.Fatal("an error eligible for a channel penalty must retain error-level handling")
+	}
+}

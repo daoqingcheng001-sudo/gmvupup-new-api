@@ -83,6 +83,15 @@ func newRequestBodyFailure(c *gin.Context, err error) *types.NewAPIError {
 	)
 }
 
+func newInvalidRequestError(err error) *types.NewAPIError {
+	return types.NewError(
+		err,
+		types.ErrorCodeInvalidRequest,
+		types.ErrOptionWithStatusCode(http.StatusBadRequest),
+		types.ErrOptionWithSkipRetry(),
+	)
+}
+
 func relayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIError {
 	var err *types.NewAPIError
 	switch info.RelayMode {
@@ -162,10 +171,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		if _, isBodyReadFailure := requestBodyFailureStatus(err); isBodyReadFailure {
 			newAPIError = newRequestBodyFailure(c, err)
 		} else {
-			newAPIError = types.NewError(err, types.ErrorCodeInvalidRequest)
-			if relayFormat == types.RelayFormatDecisions {
-				newAPIError = types.NewErrorWithStatusCode(err, types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
-			}
+			newAPIError = newInvalidRequestError(err)
 		}
 		return
 	}
@@ -981,7 +987,12 @@ func canContinueRelayRetry(retryAllowed bool, fallbackError bool, canFallback bo
 }
 
 func processChannelError(c *gin.Context, channelError types.ChannelError, err *types.NewAPIError, skipAutoDisable bool) {
-	logger.LogError(c, fmt.Sprintf("channel error (channel #%d, status code: %d): %s", channelError.ChannelId, err.StatusCode, common.LocalLogPreview(err.Error())))
+	message := fmt.Sprintf("channel error (channel #%d, status code: %d): %s", channelError.ChannelId, err.StatusCode, common.LocalLogPreview(err.Error()))
+	if isNormalClientCancellation(err) {
+		logger.LogInfo(c, message)
+	} else {
+		logger.LogError(c, message)
+	}
 	// 不要使用context获取渠道信息，异步处理时可能会出现渠道信息不一致的情况
 	// do not use context to get channel info, there may be inconsistent channel info when processing asynchronously
 	if !skipAutoDisable && service.ShouldDisableChannel(err) && channelError.AutoBan {
@@ -1034,6 +1045,11 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		model.RecordErrorLog(c, userId, channelId, modelName, tokenName, err.MaskSensitiveErrorWithStatusCode(), tokenId, useTimeSeconds, common.GetContextKeyBool(c, constant.ContextKeyIsStream), userGroup, other)
 	}
 
+}
+
+func isNormalClientCancellation(err *types.NewAPIError) bool {
+	return err != nil && err.StatusCode == 499 &&
+		types.IsSkipRetryError(err) && !types.IsChannelPenaltyAllowed(err)
 }
 
 func RelayMidjourney(c *gin.Context) {

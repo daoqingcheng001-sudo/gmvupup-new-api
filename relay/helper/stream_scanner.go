@@ -116,6 +116,7 @@ func streamTerminationError(c *gin.Context, info *relaycommon.RelayInfo, afterOu
 	errorCode := types.ErrorCodeUpstreamStreamIncomplete
 	message := "upstream stream ended before the first valid event"
 	allowChannelPenalty := true
+	suppressChannelErrorLog := false
 
 	switch info.StreamStatus.EndReason {
 	case relaycommon.StreamEndReasonFirstEventTimeout:
@@ -145,6 +146,7 @@ func streamTerminationError(c *gin.Context, info *relaycommon.RelayInfo, afterOu
 		message = "downstream connection closed before the first valid event"
 		common.SetContextKey(c, constant.ContextKeyRelayCancelOrigin, constant.RelayCancelOriginDownstreamDisconnected)
 		allowChannelPenalty = false
+		suppressChannelErrorLog = true
 	case relaycommon.StreamEndReasonRequestDeadline:
 		statusCode = http.StatusGatewayTimeout
 		errorCode = types.ErrorCodeDoRequestFailed
@@ -164,6 +166,9 @@ func streamTerminationError(c *gin.Context, info *relaycommon.RelayInfo, afterOu
 	options := []types.NewAPIErrorOptions{types.ErrOptionWithSkipRetry()}
 	if allowChannelPenalty {
 		options = append(options, types.ErrOptionWithChannelPenalty())
+	}
+	if suppressChannelErrorLog {
+		options = append(options, types.ErrOptionWithNoChannelErrorLog())
 	}
 	return types.NewErrorWithStatusCode(fmt.Errorf("%s", message), errorCode, statusCode, options...)
 }
@@ -534,7 +539,6 @@ func StreamScannerHandlerWithDecoder(c *gin.Context, resp *http.Response, info *
 				if isExpectedStreamCloseError(err) && ctx.Err() != nil {
 					return
 				}
-				logger.LogError(c, "scanner error: "+err.Error())
 				scannerEndReason = relaycommon.StreamEndReasonScannerErr
 				scannerEndErr = err
 			}
@@ -623,6 +627,10 @@ func StreamScannerHandlerWithDecoder(c *gin.Context, resp *http.Response, info *
 			common.SetContextKey(c, constant.ContextKeyUpstreamResponseDiagnostic, &diagnostic)
 		}
 	}
+	// Classify scanner closure after queued terminal events have been handled.
+	if info.StreamStatus.EndReason == relaycommon.StreamEndReasonScannerErr && info.StreamStatus.EndError != nil {
+		logger.LogError(c, "scanner error: "+common.LocalLogPreview(info.StreamStatus.EndError.Error()))
+	}
 	if info.StreamStatus.IsNormalEnd() && !info.StreamStatus.HasErrors() {
 		logger.LogInfo(c, fmt.Sprintf("stream ended: %s", info.StreamStatus.Summary()))
 	} else {
@@ -637,5 +645,5 @@ func isExpectedStreamCloseError(err error) bool {
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "use of closed network connection") ||
 		strings.Contains(msg, "context canceled") ||
-		strings.Contains(msg, "read on closed response body")
+		strings.Contains(msg, "read on closed response body") || strings.Contains(msg, "response body closed")
 }

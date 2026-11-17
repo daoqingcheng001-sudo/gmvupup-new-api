@@ -137,6 +137,13 @@ func AppendRelayObservabilityAdminInfo(ctx *gin.Context, relayInfo *relaycommon.
 	if ctx == nil || adminInfo == nil {
 		return
 	}
+	if controls, ok := common.GetContextKeyType[*types.RequestControls](ctx, constant.ContextKeyRequestControlsDiagnostic); ok && controls != nil && controls.Valid() {
+		adminInfo["request_controls"] = *controls
+	}
+	switch mode := common.GetContextKeyString(ctx, constant.ContextKeyWebSearchMode); mode {
+	case "none", "rejected", "native_cached", "managed_live", "history_only":
+		adminInfo["web_search_mode"] = mode
+	}
 	if origin := common.GetContextKeyString(ctx, constant.ContextKeyRelayCancelOrigin); origin != "" {
 		adminInfo["cancel_origin"] = origin
 	}

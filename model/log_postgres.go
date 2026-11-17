@@ -66,10 +66,12 @@ func postgresPartitionedLogSchemaStatements() []string {
 	"group" text,
 	ip text DEFAULT ''::text,
 	request_id varchar(64) DEFAULT ''::character varying,
+	attempt_id varchar(64) DEFAULT ''::character varying,
 	other text,
 	upstream_request_id varchar(128) DEFAULT ''::character varying
 ) PARTITION BY RANGE (created_at)`,
 		`ALTER SEQUENCE public.logs_id_seq OWNED BY public.logs.id`,
+		`ALTER TABLE public.logs ADD COLUMN IF NOT EXISTS attempt_id varchar(64) DEFAULT ''::character varying`,
 		`CREATE INDEX IF NOT EXISTS idx_logs_created_at_id ON public.logs (created_at DESC, id DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_logs_user_created_id ON public.logs (user_id, created_at DESC, id DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_logs_token_created_id ON public.logs (token_id, created_at DESC, id DESC)`,
@@ -78,6 +80,7 @@ func postgresPartitionedLogSchemaStatements() []string {
 		`CREATE INDEX IF NOT EXISTS idx_logs_group_created_id ON public.logs ("group", created_at DESC, id DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_logs_consume_created_cover ON public.logs (created_at DESC) INCLUDE (quota, prompt_tokens, completion_tokens) WHERE type = 2`,
 		`CREATE INDEX IF NOT EXISTS idx_logs_request_id_present ON public.logs (request_id) WHERE request_id <> ''`,
+		`CREATE INDEX IF NOT EXISTS idx_logs_attempt_id_present ON public.logs (attempt_id) WHERE attempt_id <> ''`,
 		`CREATE INDEX IF NOT EXISTS idx_logs_upstream_request_id_present ON public.logs (upstream_request_id) WHERE upstream_request_id <> ''`,
 	}
 }

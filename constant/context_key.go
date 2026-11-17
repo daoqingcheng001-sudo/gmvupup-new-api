@@ -22,6 +22,8 @@ const (
 	ContextKeyRelayTimeoutPhase          ContextKey = "relay_timeout_phase"
 	ContextKeyRelayTimeoutSeconds        ContextKey = "relay_timeout_seconds"
 	ContextKeyUpstreamResponseDiagnostic ContextKey = "upstream_response_diagnostic"
+	ContextKeyRequestControlsDiagnostic  ContextKey = "request_controls_diagnostic"
+	ContextKeyWebSearchMode              ContextKey = "web_search_mode"
 	ContextKeyUpstreamRequestStream      ContextKey = "upstream_request_stream"
 
 	/* token related keys */

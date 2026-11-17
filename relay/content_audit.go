@@ -54,6 +54,7 @@ func contentAuditWrite(c *gin.Context, info *relaycommon.RelayInfo, stage string
 		"ts":             time.Now().Format(time.RFC3339Nano),
 		"stage":          stage,
 		"request_id":     c.GetString(common.RequestIdKey),
+		"attempt_id":     c.GetString(common.AttemptIdKey),
 		"token_id":       info.TokenId,
 		"user_id":        info.UserId,
 		"model":          info.OriginModelName,

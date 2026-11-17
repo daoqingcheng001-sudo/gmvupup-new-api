@@ -37,7 +37,7 @@ func TestGetUserLogsOrdersByCreatedAtThenID(t *testing.T) {
 		t.Fatalf("failed to seed logs: %v", err)
 	}
 
-	got, _, err := GetUserLogs(7, LogTypeUnknown, 0, 0, "", "", 0, 10, "", "", "")
+	got, _, err := GetUserLogs(7, LogTypeUnknown, 0, 0, "", "", 0, 10, "", "", "", "")
 	if err != nil {
 		t.Fatalf("failed to get user logs: %v", err)
 	}
@@ -49,6 +49,42 @@ func TestGetUserLogsOrdersByCreatedAtThenID(t *testing.T) {
 		if got[i].Content != content {
 			t.Fatalf("log %d content = %q, want %q; all logs=%+v", i, got[i].Content, content, got)
 		}
+	}
+}
+
+func TestGetUserLogsCanFilterRepeatedRequestIDByAttemptID(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:"+strings.ReplaceAll(t.Name(), "/", "_")+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open sqlite db: %v", err)
+	}
+	if err := db.AutoMigrate(&Log{}); err != nil {
+		t.Fatalf("failed to migrate log table: %v", err)
+	}
+
+	oldLogDB := LOG_DB
+	LOG_DB = db
+	t.Cleanup(func() {
+		LOG_DB = oldLogDB
+		sqlDB, dbErr := db.DB()
+		if dbErr == nil {
+			_ = sqlDB.Close()
+		}
+	})
+
+	logs := []Log{
+		{UserId: 7, CreatedAt: 10, Type: LogTypeConsume, RequestId: "client-retry-id", AttemptId: "attempt-1", Content: "first"},
+		{UserId: 7, CreatedAt: 11, Type: LogTypeConsume, RequestId: "client-retry-id", AttemptId: "attempt-2", Content: "second"},
+	}
+	if err := db.Create(&logs).Error; err != nil {
+		t.Fatalf("failed to seed logs: %v", err)
+	}
+
+	got, total, err := GetUserLogs(7, LogTypeUnknown, 0, 0, "", "", 0, 10, "", "client-retry-id", "", "attempt-2")
+	if err != nil {
+		t.Fatalf("failed to get user logs: %v", err)
+	}
+	if total != 1 || len(got) != 1 || got[0].Content != "second" {
+		t.Fatalf("expected only attempt-2, total=%d logs=%+v", total, got)
 	}
 }
 
@@ -64,6 +100,8 @@ func TestPostgresPartitionedLogSchemaStatements(t *testing.T) {
 		"CREATE INDEX IF NOT EXISTS idx_logs_user_created_id",
 		"CREATE INDEX IF NOT EXISTS idx_logs_consume_created_cover",
 		"CREATE INDEX IF NOT EXISTS idx_logs_request_id_present",
+		"CREATE INDEX IF NOT EXISTS idx_logs_attempt_id_present",
+		"ADD COLUMN IF NOT EXISTS attempt_id",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("expected schema statements to contain %q, got:\n%s", want, joined)

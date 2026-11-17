@@ -12,11 +12,11 @@ import (
 	"net"
 	"net/http"
 	"reflect"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/pkg/websearch"
 	"github.com/QuantumNous/new-api/relay/channel"
@@ -75,25 +75,33 @@ func ManagedWebHelper(c *gin.Context, info *relaycommon.RelayInfo, run func() *t
 		return webError(err, 500)
 	}
 	var plan *websearch.Plan
+	controls := types.InspectRequestControls(gjson.ParseBytes(body))
+	common.SetContextKey(c, constant.ContextKeyRequestControlsDiagnostic, &controls)
+	common.SetContextKey(c, constant.ContextKeyWebSearchMode, "none")
 	if !alpha {
 		plan, err = websearch.NewPlan(body, protocol)
 		if err != nil {
+			common.SetContextKey(c, constant.ContextKeyWebSearchMode, "rejected")
 			return webError(err, 400)
 		}
 		if plan == nil {
-			if !bytes.Contains(body, []byte("ws_na_")) {
-				return run()
-			}
 			o, e := websearch.Obj(body)
 			if e != nil {
 				return webError(e, 400)
 			}
 			plan = &websearch.Plan{Protocol: protocol, Body: o, Limit: 8}
+			if !plan.HasManagedHistory() {
+				return run()
+			}
+			common.SetContextKey(c, constant.ContextKeyWebSearchMode, "history_only")
+			return runWithManagedHistory(c, info, run, plan)
 		}
 		if plan.NativeCachedSearch {
-			return runNativeCachedSearch(c, info, run, plan)
+			common.SetContextKey(c, constant.ContextKeyWebSearchMode, "native_cached")
+			return runWithManagedHistory(c, info, run, plan)
 		}
 	}
+	common.SetContextKey(c, constant.ContextKeyWebSearchMode, "managed_live")
 	if len(body) > 32<<20 {
 		return webError(errors.New("managed web request exceeds 32 MiB"), 413)
 	}
@@ -125,17 +133,11 @@ func ManagedWebHelper(c *gin.Context, info *relaycommon.RelayInfo, run func() *t
 	return runManagedWeb(c, info, run, body, plan, session)
 }
 
-// Preserve the provider's cached search, native events and existing tool billing.
-// Most requests need no rewrite or managed-search credentials/history store.
-func runNativeCachedSearch(c *gin.Context, info *relaycommon.RelayInfo, run func() *types.NewAPIError, plan *websearch.Plan) *types.NewAPIError {
-	hasManagedHistory := false
-	for _, item := range gjson.ParseBytes(plan.Body["input"]).Array() {
-		if strings.HasPrefix(item.Get("id").String(), "ws_na_") {
-			hasManagedHistory = true
-			break
-		}
-	}
-	if !hasManagedHistory {
+// Restore caller-bound history without enabling live tools, rewriting tool
+// definitions, or depending on live-search credentials. Normal provider events
+// and billing remain owned by the selected relay.
+func runWithManagedHistory(c *gin.Context, info *relaycommon.RelayInfo, run func() *types.NewAPIError, plan *websearch.Plan) *types.NewAPIError {
+	if !plan.HasManagedHistory() {
 		return run()
 	}
 	if common.RDB == nil {

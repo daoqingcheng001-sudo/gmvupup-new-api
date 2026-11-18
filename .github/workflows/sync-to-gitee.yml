@@ -18,6 +18,8 @@ env:
 
 jobs:
   sync-to-gitee:
+    # Disabled in this fork until its release or external automation is explicitly configured.
+    if: ${{ false }}
     runs-on: sync
     steps:
       - name: Checkout

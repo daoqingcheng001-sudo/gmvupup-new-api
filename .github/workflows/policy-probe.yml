@@ -1,9 +1,0 @@
-name: Policy isolation probe
-on: pull_request
-permissions:
-  contents: read
-jobs:
-  harmless:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo 'This temporary probe has no publishing or secrets.'

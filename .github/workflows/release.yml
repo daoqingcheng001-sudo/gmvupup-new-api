@@ -15,6 +15,8 @@ on:
 
 jobs:
   linux:
+    # Disabled in this fork until release automation is explicitly configured.
+    if: ${{ false }}
     name: Linux Release
     runs-on: ubuntu-latest
     steps:
@@ -68,6 +70,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   macos:
+    # Disabled in this fork until release automation is explicitly configured.
+    if: ${{ false }}
     name: macOS Release
     runs-on: macos-latest
     steps:
@@ -117,6 +121,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   windows:
+    # Disabled in this fork until release automation is explicitly configured.
+    if: ${{ false }}
     name: Windows Release
     runs-on: windows-latest
     defaults:

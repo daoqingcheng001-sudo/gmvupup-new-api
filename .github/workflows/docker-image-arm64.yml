@@ -15,6 +15,8 @@ on:
 
 jobs:
   test:
+    # Disabled in this fork until its release or external automation is explicitly configured.
+    if: ${{ false }}
     name: Go test
     runs-on: [self-hosted, ci-vps]
     permissions:
@@ -49,6 +51,8 @@ jobs:
         run: go test ./... -count=1 -timeout=180s
 
   build_single_arch:
+    # Disabled in this fork until its release or external automation is explicitly configured.
+    if: ${{ false }}
     name: Build & push (linux/amd64)
     needs: [test]
     runs-on: [self-hosted, ci-vps]

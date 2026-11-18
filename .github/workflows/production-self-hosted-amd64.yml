@@ -17,6 +17,8 @@ concurrency:
 
 jobs:
   test-build-publish:
+    # Disabled in this fork until its release or external automation is explicitly configured.
+    if: ${{ false }}
     name: Test, build and publish amd64
     runs-on: [self-hosted, ci-vps]
     timeout-minutes: 60

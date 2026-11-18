@@ -44,3 +44,10 @@ jobs:
       - name: Verify time billing expressions
         run: bun test src/pages/Setting/Ratio/components/requestRuleExpr.test.js
       - run: bun run build
+
+  ai-review:
+    name: Automatic AI code review
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    permissions:
+      pull-requests: read
+    uses: ./.github/workflows/ai-review.yml

@@ -23,8 +23,10 @@ concurrency:
 
 jobs:
   prepare-release:
+    # Disabled in this fork until release automation is explicitly configured.
+    if: ${{ false }}
     name: Create or update GitCode release
-    if: ${{ vars.GITCODE_REPOSITORY != '' }}
+    # Original if: ${{ vars.GITCODE_REPOSITORY != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     outputs:
@@ -229,9 +231,11 @@ jobs:
           retention-days: 1
 
   gitcode-release-assets:
+    # Disabled in this fork until release automation is explicitly configured.
+    if: ${{ false }}
     name: Publish GitCode asset (${{ matrix.file_name }})
     needs: prepare-release
-    if: ${{ inputs.sync_files && needs.prepare-release.result == 'success' && needs.prepare-release.outputs.has_release_assets == 'true' }}
+    # Original if: ${{ inputs.sync_files && needs.prepare-release.result == 'success' && needs.prepare-release.outputs.has_release_assets == 'true' }}
     strategy:
       fail-fast: false
       max-parallel: 4

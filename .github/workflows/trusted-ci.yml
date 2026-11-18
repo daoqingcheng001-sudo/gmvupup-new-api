@@ -1,4 +1,5 @@
 name: Trusted CI
+# PR validation for this fork uses GitHub-hosted runners.
 
 on:
   push:

@@ -10,6 +10,8 @@ on:
 
 jobs:
   build:
+    # Disabled in this fork until release automation is explicitly configured.
+    if: ${{ false }}
     strategy:
       matrix:
         # os: [macos-latest, windows-latest]
@@ -122,9 +124,11 @@ jobs:
             electron/dist/*.exe
 
   release:
+    # Disabled in this fork until release automation is explicitly configured.
+    if: ${{ false }}
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    # Original if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
 

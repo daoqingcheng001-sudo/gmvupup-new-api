@@ -99,7 +99,7 @@ func TestSaaSGiftEnsureAtomicReplayAndIsolation(t *testing.T) {
 	assert.Empty(t, u.Password)
 	assert.Empty(t, u.Email)
 	assert.Equal(t, "双十一", k.Group)
-	assert.Equal(t, SaaSGiftModel, k.ModelLimits)
+	assert.Equal(t, SaaSGiftModelLimits, k.ModelLimits)
 	assert.True(t, k.ModelLimitsEnabled)
 	assert.False(t, k.UnlimitedQuota)
 	assert.False(t, k.CrossGroupRetry)
@@ -323,4 +323,28 @@ func TestSaaSGiftCachedUsageCreditAndFreeze(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, old.Duplicated)
 	assert.ErrorIs(t, ValidateSaaSGiftToken(context.Background(), cached), ErrSaaSGiftFrozen)
+}
+
+func TestGiftModelExpansionPreservesRestrictions(t *testing.T) {
+	for _, name := range []string{SaaSGiftModel, SaaSGiftFlashModel} {
+		assert.True(t, IsSaaSGiftModel(name))
+	}
+	for _, value := range []string{SaaSGiftModel, SaaSGiftModelLimits, SaaSGiftFlashModel + "," + SaaSGiftModel} {
+		assert.True(t, validGiftModelLimits(value))
+	}
+	for _, value := range []string{"", SaaSGiftFlashModel, "gpt-4o", SaaSGiftModel + ",gpt-4o", SaaSGiftModel + "," + SaaSGiftModel, SaaSGiftModelLimits + ","} {
+		assert.False(t, validGiftModelLimits(value))
+	}
+	setupSaaSGiftTest(t)
+	require.NoError(t, DB.Create(&Ability{Group: "双十一", Model: SaaSGiftFlashModel, ChannelId: 2, Enabled: true}).Error)
+	a := createGift(t, "two-model-wallet")
+	tok, err := GetTokenById(*a.TokenID)
+	require.NoError(t, err)
+	assert.Equal(t, SaaSGiftModelLimits, tok.ModelLimits)
+	require.NoError(t, ValidateSaaSGiftToken(context.Background(), tok))
+	require.NoError(t, DB.Model(&Token{}).Where("id = ?", tok.Id).Update("model_limits", SaaSGiftModel).Error)
+	tok.ModelLimits = SaaSGiftModel
+	require.NoError(t, ValidateSaaSGiftToken(context.Background(), tok))
+	require.NoError(t, DB.Create(&Ability{Group: "双十一", Model: "gpt-4o", ChannelId: 3, Enabled: true}).Error)
+	assert.ErrorIs(t, validateGiftGroup(DB, a), ErrSaaSGiftPolicy)
 }

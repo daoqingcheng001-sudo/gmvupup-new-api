@@ -51,8 +51,8 @@ func Distribute() func(c *gin.Context) {
 			return
 		}
 		if giftModel := c.GetString("saas_gift_model"); giftModel != "" {
-			if modelRequest.Model != giftModel || ok || (modelRequest.Group != "" && modelRequest.Group != c.GetString("saas_gift_group")) {
-				abortWithOpenAiMessage(c, http.StatusForbidden, "gift key only supports its assigned aggregate model and group")
+			if !model.IsSaaSGiftModel(modelRequest.Model) || ok || (modelRequest.Group != "" && modelRequest.Group != c.GetString("saas_gift_group")) {
+				abortWithOpenAiMessage(c, http.StatusForbidden, "gift key only supports its assigned models and group")
 				return
 			}
 		}

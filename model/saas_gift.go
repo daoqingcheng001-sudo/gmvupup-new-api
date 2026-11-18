@@ -18,6 +18,8 @@ const (
 	SaaSGiftCampaign      = "double11-2026"
 	SaaSGiftPolicyVersion = "double11-2026-v1"
 	SaaSGiftModel         = "claude-sonnet-4-6"
+	SaaSGiftFlashModel    = "glm-5.3-flash"
+	SaaSGiftModelLimits   = SaaSGiftModel + "," + SaaSGiftFlashModel
 	SaaSGiftActive        = "ACTIVE"
 	SaaSGiftFrozen        = "FROZEN_PENDING_REVIEW"
 )
@@ -119,7 +121,15 @@ func validateGiftGroup(tx *gorm.DB, account *SaaSGiftAccount) error {
 	if err := tx.Model(&Ability{}).Where(clause.Eq{Column: clause.Column{Name: "group"}, Value: account.Group}).Where("enabled = ?", true).Distinct("model").Pluck("model", &models).Error; err != nil {
 		return err
 	}
-	if len(models) != 1 || models[0] != SaaSGiftModel {
+	if len(models) == 0 {
+		return ErrSaaSGiftPolicy
+	}
+	for _, name := range models {
+		if !IsSaaSGiftModel(name) {
+			return ErrSaaSGiftPolicy
+		}
+	}
+	if !containsGiftModel(models, SaaSGiftModel) {
 		return ErrSaaSGiftPolicy
 	}
 	return nil
@@ -254,7 +264,7 @@ func EnsureSaaSGiftAccount(ctx context.Context, req SaaSGiftEnsureRequest) (*Saa
 				if err := tx.Create(&user).Error; err != nil {
 					return err
 				}
-				token := Token{UserId: user.Id, Key: key, Name: "双十一赠送", Status: common.TokenStatusEnabled, CreatedTime: common.GetTimestamp(), ExpiredTime: -1, Group: account.Group, ModelLimitsEnabled: true, ModelLimits: SaaSGiftModel, SaaSGiftAccountID: account.ID}
+				token := Token{UserId: user.Id, Key: key, Name: "双十一赠送", Status: common.TokenStatusEnabled, CreatedTime: common.GetTimestamp(), ExpiredTime: -1, Group: account.Group, ModelLimitsEnabled: true, ModelLimits: SaaSGiftModelLimits, SaaSGiftAccountID: account.ID}
 				if err := tx.Create(&token).Error; err != nil {
 					return err
 				}
@@ -311,7 +321,7 @@ func validateGiftBinding(tx *gorm.DB, account *SaaSGiftAccount) error {
 		return err
 	}
 	if user.SaaSGiftAccountID != account.ID || user.Role != common.RoleCommonUser || user.Status != common.UserStatusEnabled || user.Group != account.Group || user.SaaSGiftFrozen ||
-		token.SaaSGiftAccountID != account.ID || token.UserId != user.Id || token.Group != account.Group || token.UnlimitedQuota || token.CrossGroupRetry || !token.ModelLimitsEnabled || token.ModelLimits != SaaSGiftModel || token.Status == common.TokenStatusDisabled || token.ExpiredTime != -1 {
+		token.SaaSGiftAccountID != account.ID || token.UserId != user.Id || token.Group != account.Group || token.UnlimitedQuota || token.CrossGroupRetry || !token.ModelLimitsEnabled || !validGiftModelLimits(token.ModelLimits) || token.Status == common.TokenStatusDisabled || token.ExpiredTime != -1 {
 		return ErrSaaSGiftPolicy
 	}
 	return nil
@@ -526,8 +536,31 @@ func ValidateSaaSGiftToken(ctx context.Context, token *Token) error {
 	if account.TokenID == nil || *account.TokenID != token.Id || account.UserID == nil || *account.UserID != token.UserId {
 		return ErrSaaSGiftPolicy
 	}
-	if token.Group != account.Group || token.UnlimitedQuota || token.CrossGroupRetry || !token.ModelLimitsEnabled || token.ModelLimits != SaaSGiftModel || token.ExpiredTime != -1 {
+	if token.Group != account.Group || token.UnlimitedQuota || token.CrossGroupRetry || !token.ModelLimitsEnabled || !validGiftModelLimits(token.ModelLimits) || token.ExpiredTime != -1 {
 		return ErrSaaSGiftPolicy
 	}
 	return validateGiftBinding(DB.WithContext(ctx), &account)
+}
+
+// The legacy single-model limit remains valid while existing gift keys migrate.
+// Unknown models, empty entries and duplicates must never widen a gift key.
+func validGiftModelLimits(value string) bool {
+	if value == SaaSGiftModel {
+		return true
+	}
+	names := strings.Split(value, ",")
+	return len(names) == 2 && names[0] != names[1] && IsSaaSGiftModel(names[0]) && IsSaaSGiftModel(names[1])
+}
+
+func IsSaaSGiftModel(name string) bool {
+	return name == SaaSGiftModel || name == SaaSGiftFlashModel
+}
+
+func containsGiftModel(names []string, name string) bool {
+	for _, candidate := range names {
+		if candidate == name {
+			return true
+		}
+	}
+	return false
 }
